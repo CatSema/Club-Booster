@@ -1,5 +1,5 @@
 # Configuration
-$GitHubScriptUrl = "https://raw.githubusercontent.com/CatSema/Club-Anti-Zapret/refs/heads/main/DiscordEnhancedConnectivity.ps1"
+$GitHubScriptUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $LocalScriptDir = "$env:LOCALAPPDATA\DiscordEnhancedConnectivity"
 $LocalScriptPath = "$LocalScriptDir\DiscordEnhancedConnectivity.ps1"
 $DesktopPath = [Environment]::GetFolderPath("Desktop")
