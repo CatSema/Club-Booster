@@ -1,10 +1,11 @@
 ﻿# PowerShell script for launching Discord with enhanced connectivity
 # Architecture: automatic download, launch and connectivity enhancement completion
-# Version: zapret-discord-youtube-1.8.5
+# Version: zapret-discord-youtube latest release
 
 param(
     [string]$DiscordPath = $null,
-    [string]$ConnectivityScript = "general (FAKE TLS AUTO).bat"
+    [string]$ConnectivityScript = "general (FAKE TLS AUTO).bat",
+    [switch]$SkipSelfUpdate
 )
 
 # Adding duplicate protection
@@ -15,12 +16,15 @@ if (!$mutex.WaitOne(100)) {
     Write-Host "Another instance of the script is already running"
     exit 1
 }
+$mutexAcquired = $true
 
 # Configuration
-$ReleaseUrl = "https://github.com/Flowseal/zapret-discord-youtube/releases/download/1.8.5/zapret-discord-youtube-1.8.5.zip"
+$LauncherScriptVersion = "1.1.0"
+$LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
+$SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Anti-Zapret/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
-$ZipPath = Join-Path $TempDir "zapret-discord-youtube-1.8.5.zip"
-$ExtractDir = Join-Path $TempDir "zapret-discord-youtube-1.8.5"
+$ZipPath = Join-Path $TempDir "zapret-discord-youtube-latest.zip"
+$ExtractDir = Join-Path $TempDir "zapret-discord-youtube-latest"
 
 # Function to create and show modal notification with Discord dark theme and modern design
 function Show-ModalNotification {
@@ -432,6 +436,113 @@ function Write-LogMessage {
     }
 }
 
+function Get-LauncherScriptVersionFromFile {
+    param([string]$FilePath)
+
+    try {
+        $content = Get-Content -Path $FilePath -Encoding UTF8 -Raw -ErrorAction Stop
+        $match = [regex]::Match($content, '(?m)^\s*\$LauncherScriptVersion\s*=\s*["'']([^"'']+)["'']')
+        if ($match.Success) {
+            return [version]$match.Groups[1].Value
+        }
+    }
+    catch {
+        Write-LogMessage "Could not read launcher version from ${FilePath}: $($_.Exception.Message)" "WARN"
+    }
+
+    return $null
+}
+
+function Restart-LauncherScript {
+    param([string]$CurrentScriptPath)
+
+    $arguments = @(
+        "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $CurrentScriptPath,
+        "-SkipSelfUpdate"
+    )
+
+    if ($DiscordPath) {
+        $arguments += @("-DiscordPath", $DiscordPath)
+    }
+
+    if ($ConnectivityScript) {
+        $arguments += @("-ConnectivityScript", $ConnectivityScript)
+    }
+
+    Write-LogMessage "Restarting launcher with updated script..." "INFO"
+    $script:mutex.ReleaseMutex()
+    $script:mutex.Dispose()
+    $script:mutexAcquired = $false
+    Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList $arguments -WorkingDirectory (Split-Path $CurrentScriptPath -Parent) | Out-Null
+}
+
+# Update the locally installed launcher script before doing heavier startup work.
+# When an update is installed, restart immediately so the current launch uses it.
+function Update-LauncherScript {
+    param(
+        [string]$SourceUrl,
+        [string]$CurrentScriptPath
+    )
+
+    if ($SkipSelfUpdate) {
+        Write-LogMessage "Self-update skipped by parameter" "INFO"
+        return
+    }
+
+    if (!$CurrentScriptPath -or !(Test-Path $CurrentScriptPath)) {
+        Write-LogMessage "Self-update skipped: current script path is unavailable" "WARN"
+        return
+    }
+
+    try {
+        $currentItem = Get-Item -Path $CurrentScriptPath -ErrorAction Stop
+        $tempUpdatePath = Join-Path $currentItem.DirectoryName "$($currentItem.BaseName).update.tmp"
+
+        Write-LogMessage "Checking launcher script updates..." "INFO"
+        Invoke-WebRequest -Uri $SourceUrl -OutFile $tempUpdatePath -UseBasicParsing -TimeoutSec 15 -Headers @{ "User-Agent" = "Club-Anti-Zapret" }
+
+        if (!(Test-Path $tempUpdatePath) -or (Get-Item $tempUpdatePath).Length -eq 0) {
+            throw "Downloaded update is empty"
+        }
+
+        $installedVersion = [version]$LauncherScriptVersion
+        $downloadedVersion = Get-LauncherScriptVersionFromFile -FilePath $tempUpdatePath
+        if (!$downloadedVersion) {
+            throw "Downloaded update does not define LauncherScriptVersion"
+        }
+
+        Write-LogMessage "Installed launcher version: $installedVersion, available version: $downloadedVersion" "INFO"
+
+        if ($downloadedVersion -le $installedVersion) {
+            Remove-Item -Path $tempUpdatePath -Force -ErrorAction SilentlyContinue
+            Write-LogMessage "Launcher script is already up to date" "INFO"
+            return
+        }
+
+        $tokens = $null
+        $parseErrors = $null
+        [System.Management.Automation.Language.Parser]::ParseFile($tempUpdatePath, [ref]$tokens, [ref]$parseErrors) | Out-Null
+        if ($parseErrors.Count -gt 0) {
+            throw "Downloaded update has PowerShell syntax errors"
+        }
+
+        Copy-Item -Path $tempUpdatePath -Destination $CurrentScriptPath -Force
+        Remove-Item -Path $tempUpdatePath -Force -ErrorAction SilentlyContinue
+        Write-LogMessage "Launcher script updated to version $downloadedVersion" "INFO"
+
+        Restart-LauncherScript -CurrentScriptPath $CurrentScriptPath
+        exit 0
+    }
+    catch {
+        if ($tempUpdatePath) {
+            Remove-Item -Path $tempUpdatePath -Force -ErrorAction SilentlyContinue
+        }
+        Write-LogMessage "Self-update failed, continuing with current script: $($_.Exception.Message)" "WARN"
+    }
+}
+
 # Improved function to modify batch file for hidden execution of winws.exe
 function Modify-BatchFileForHiddenExecution {
     param(
@@ -491,6 +602,8 @@ function Modify-BatchFileForHiddenExecution {
 
 # Error handling
 $ErrorActionPreference = "Stop"
+
+Update-LauncherScript -SourceUrl $SelfUpdateUrl -CurrentScriptPath $PSCommandPath
 
 # Show modal notification at the very beginning
 $notificationForm = $null
@@ -576,19 +689,24 @@ try {
     # Download archive
     Write-LogMessage "Downloading connectivity enhancement archive..." "INFO"
     try {
-        # Check URL availability
-        $request = [System.Net.WebRequest]::Create($ReleaseUrl)
-        $request.Method = "HEAD"
-        $response = $request.GetResponse()
-        
-        # Check file size
-        $fileSize = $response.ContentLength
+        $release = Invoke-RestMethod -Uri $LatestReleaseApiUrl -Headers @{ "User-Agent" = "Club-Anti-Zapret" } -TimeoutSec 30
+        $releaseAsset = $release.assets | Where-Object {
+            $_.name -like "zapret-discord-youtube-*.zip" -and
+            $_.browser_download_url -like "*.zip"
+        } | Select-Object -First 1
+        if (!$releaseAsset) {
+            throw "Could not find zapret-discord-youtube zip archive in the latest release"
+        }
+
+        $ReleaseUrl = $releaseAsset.browser_download_url
+        Write-LogMessage "Latest release: $($release.tag_name), archive: $($releaseAsset.name)" "INFO"
+
+        $fileSize = [int64]$releaseAsset.size
         if ($fileSize -gt $maxDownloadSize) {
             throw "File size exceeds the allowed limit: $fileSize bytes"
         }
         
         Write-LogMessage "Archive size: $fileSize bytes" "INFO"
-        $response.Close()
         
         # Download file using Invoke-WebRequest with timeout
         Invoke-WebRequest -Uri $ReleaseUrl -OutFile $ZipPath -TimeoutSec 30
@@ -614,11 +732,27 @@ try {
     # Extract archive
     Write-LogMessage "Extracting archive..." "INFO"
     Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = $null
     try {
+        if (Test-Path $ExtractDir) {
+            Remove-Item -Path $ExtractDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
+
+        $fullExtractDir = [System.IO.Path]::GetFullPath($ExtractDir)
+        if (!$fullExtractDir.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+            $fullExtractDir += [System.IO.Path]::DirectorySeparatorChar
+        }
+
         $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
         $entryCount = 0
         foreach ($entry in $zip.Entries) {
             $destinationPath = Join-Path $ExtractDir $entry.FullName
+            $fullDestinationPath = [System.IO.Path]::GetFullPath($destinationPath)
+            if (!$fullDestinationPath.StartsWith($fullExtractDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "Archive entry attempts to write outside extract directory: $($entry.FullName)"
+            }
+
             $destinationDir = Split-Path $destinationPath -Parent
             
             if (!(Test-Path $destinationDir)) {
@@ -630,12 +764,16 @@ try {
                 $entryCount++
             }
         }
-        $zip.Dispose()
         Write-LogMessage "Extracted $entryCount files from archive" "INFO"
     }
     catch {
         Write-LogMessage "Error extracting archive: $($_.Exception.Message)" "ERROR"
         throw "Error extracting archive: $($_.Exception.Message)"
+    }
+    finally {
+        if ($zip) {
+            $zip.Dispose()
+        }
     }
     
     # Check that the extraction directory contains files
@@ -950,6 +1088,8 @@ finally {
     }
     
     # Release mutex
-    $mutex.ReleaseMutex()
-    $mutex.Dispose()
+    if ($mutexAcquired) {
+        $mutex.ReleaseMutex()
+        $mutex.Dispose()
+    }
 }

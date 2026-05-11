@@ -145,4 +145,5 @@ Write-Host "`nInformation:" -ForegroundColor White
 Write-Host "  Script: $LocalScriptPath" -ForegroundColor Gray
 Write-Host "  Shortcut: $ShortcutPath" -ForegroundColor Gray
 Write-Host "  Icon: $DiscordIconPath" -ForegroundColor Gray
+Write-Host "  Updates: the local script installs newer GitHub versions before launching Discord" -ForegroundColor Gray
 Write-Host "`nYou can now launch Discord using the desktop shortcut!" -ForegroundColor Green
