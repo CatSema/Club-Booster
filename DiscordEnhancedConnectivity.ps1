@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.2"
+$LauncherScriptVersion = "1.1.3"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
@@ -817,8 +817,16 @@ try {
     $connectivityScriptPath = Join-Path $ExtractDir $ConnectivityScript
     
     if (!(Test-Path $connectivityScriptPath)) {
+        $connectivityScriptItem = Get-ChildItem -Path $ExtractDir -Filter $ConnectivityScript -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (!$connectivityScriptItem) {
             throw "Connectivity script not found: $connectivityScriptPath"
         }
+
+        $connectivityScriptPath = $connectivityScriptItem.FullName
+        Write-LogMessage "Connectivity script found in archive subdirectory: $connectivityScriptPath" "INFO"
+    }
+
+    $connectivityWorkingDirectory = Split-Path $connectivityScriptPath -Parent
 
     # Modify batch file for hidden execution
     Write-LogMessage "Preparing batch file for hidden execution..." "INFO"
@@ -831,7 +839,7 @@ try {
     $processInfo = New-Object System.Diagnostics.ProcessStartInfo
     $processInfo.FileName = "cmd.exe"
     $processInfo.Arguments = "/c `"$connectivityScriptPath`""
-    $processInfo.WorkingDirectory = $ExtractDir
+    $processInfo.WorkingDirectory = $connectivityWorkingDirectory
     $processInfo.UseShellExecute = $false
     $processInfo.CreateNoWindow = $true
     $processInfo.RedirectStandardOutput = $true
