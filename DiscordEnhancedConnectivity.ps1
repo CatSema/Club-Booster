@@ -4,7 +4,7 @@
 
 param(
     [string]$DiscordPath = $null,
-    [string]$ConnectivityScript = "general (FAKE TLS AUTO).bat",
+    [string]$ConnectivityScript = "general (ALT9).bat",
     [switch]$SkipSelfUpdate
 )
 
@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.4"
+$LauncherScriptVersion = "1.1.5"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
