@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.5"
+$LauncherScriptVersion = "1.1.7"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
@@ -413,6 +413,48 @@ function Test-ZapretInitialized {
     return $runningProcs.Count -gt 0
 }
 
+function Stop-ExistingConnectivityArtifacts {
+    Write-LogMessage "Cleaning up existing connectivity artifacts..." "INFO"
+
+    $connectivityProcs = Get-Process | Where-Object {
+        $_.ProcessName -match "winws|zapret|divert|WinDivert|windivert" -or
+        ($_.Path -and $_.Path -match "\\zapret|\\windivert|WinDivert")
+    }
+
+    foreach ($proc in $connectivityProcs) {
+        try {
+            if (!$proc.HasExited) {
+                Write-LogMessage "Stopping connectivity process (ID: $($proc.Id), Name: $($proc.ProcessName))" "INFO"
+                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-LogMessage "Failed to stop connectivity process (ID: $($proc.Id)): $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    try {
+        $driverLines = driverquery /FO CSV /NH 2>$null | ConvertFrom-Csv -Header ModuleName,DisplayName,DriverType,LinkDate | Where-Object {
+            $_.ModuleName -match "Divert|WinDivert" -or $_.DisplayName -match "Divert|WinDivert"
+        }
+
+        foreach ($driver in $driverLines) {
+            $serviceName = $driver.ModuleName
+            if ([string]::IsNullOrWhiteSpace($serviceName)) { continue }
+
+            Write-LogMessage "Stopping WinDivert service: $serviceName" "INFO"
+            & sc.exe stop $serviceName | Out-Null
+            Start-Sleep -Milliseconds 500
+
+            Write-LogMessage "Deleting WinDivert service: $serviceName" "INFO"
+            & sc.exe delete $serviceName | Out-Null
+        }
+    }
+    catch {
+        Write-LogMessage "Failed to query or remove WinDivert services: $($_.Exception.Message)" "WARN"
+    }
+}
+
 # Structured error logging
 function Write-LogMessage {
     param(
@@ -725,7 +767,7 @@ try {
                 $httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Club-Booster")
 
                 $response = $httpClient.GetAsync($ReleaseUrl).GetAwaiter().GetResult()
-                $response.EnsureSuccessStatusCode()
+                $response.EnsureSuccessStatusCode() | Out-Null
 
                 $downloadBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
                 [System.IO.File]::WriteAllBytes($ZipPath, $downloadBytes)
@@ -772,7 +814,13 @@ try {
     $zip = $null
     try {
         if (Test-Path $ExtractDir) {
-            Remove-Item -Path $ExtractDir -Recurse -Force
+            Stop-ExistingConnectivityArtifacts
+            try {
+                Remove-Item -Path $ExtractDir -Recurse -Force -ErrorAction Stop
+            }
+            catch {
+                throw "Could not remove previous extract directory after cleanup: $($_.Exception.Message)"
+            }
         }
         New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
 
