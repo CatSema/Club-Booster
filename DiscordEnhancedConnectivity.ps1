@@ -708,8 +708,23 @@ try {
         
         Write-LogMessage "Archive size: $fileSize bytes" "INFO"
         
-        # Download file using Invoke-WebRequest with timeout
-        Invoke-WebRequest -Uri $ReleaseUrl -OutFile $ZipPath -TimeoutSec 30
+        $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
+        $httpClientHandler.AllowAutoRedirect = $true
+        $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+        try {
+            $httpClient.Timeout = [TimeSpan]::FromSeconds(60)
+            $httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Club-Booster")
+
+            $response = $httpClient.GetAsync($ReleaseUrl).GetAwaiter().GetResult()
+            $response.EnsureSuccessStatusCode()
+
+            $downloadBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+            [System.IO.File]::WriteAllBytes($ZipPath, $downloadBytes)
+        }
+        finally {
+            if ($httpClient) { $httpClient.Dispose() }
+            if ($httpClientHandler) { $httpClientHandler.Dispose() }
+        }
     }
     catch {
         Write-LogMessage "Error downloading archive: $($_.Exception.Message)" "ERROR"
