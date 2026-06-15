@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.1"
+$LauncherScriptVersion = "1.1.2"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
@@ -708,22 +708,38 @@ try {
         
         Write-LogMessage "Archive size: $fileSize bytes" "INFO"
         
-        $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
-        $httpClientHandler.AllowAutoRedirect = $true
-        $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
         try {
-            $httpClient.Timeout = [TimeSpan]::FromSeconds(60)
-            $httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Club-Booster")
+            Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
 
-            $response = $httpClient.GetAsync($ReleaseUrl).GetAwaiter().GetResult()
-            $response.EnsureSuccessStatusCode()
+            $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
+            $httpClientHandler.AllowAutoRedirect = $true
+            $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+            try {
+                $httpClient.Timeout = [TimeSpan]::FromSeconds(60)
+                $httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Club-Booster")
 
-            $downloadBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
-            [System.IO.File]::WriteAllBytes($ZipPath, $downloadBytes)
+                $response = $httpClient.GetAsync($ReleaseUrl).GetAwaiter().GetResult()
+                $response.EnsureSuccessStatusCode()
+
+                $downloadBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+                [System.IO.File]::WriteAllBytes($ZipPath, $downloadBytes)
+            }
+            finally {
+                if ($httpClient) { $httpClient.Dispose() }
+                if ($httpClientHandler) { $httpClientHandler.Dispose() }
+            }
         }
-        finally {
-            if ($httpClient) { $httpClient.Dispose() }
-            if ($httpClientHandler) { $httpClientHandler.Dispose() }
+        catch {
+            Write-LogMessage "HttpClient download failed, trying WebClient fallback: $($_.Exception.Message)" "WARN"
+
+            $webClient = New-Object System.Net.WebClient
+            try {
+                $webClient.Headers.Add("User-Agent", "Club-Booster")
+                $webClient.DownloadFile($ReleaseUrl, $ZipPath)
+            }
+            finally {
+                if ($webClient) { $webClient.Dispose() }
+            }
         }
     }
     catch {
