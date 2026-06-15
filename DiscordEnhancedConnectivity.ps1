@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.9"
+$LauncherScriptVersion = "1.1.10"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
@@ -528,14 +528,14 @@ function Restart-LauncherScript {
     $script:mutexAcquired = $false
 
     $powerShellPath = (Get-Process -Id $PID).Path
-    if ($Host.Name -eq "ConsoleHost") {
-        $process = Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WorkingDirectory (Split-Path $CurrentScriptPath -Parent) -PassThru
-        $process.WaitForExit()
-        exit $process.ExitCode
+    Push-Location -Path (Split-Path $CurrentScriptPath -Parent)
+    try {
+        & $powerShellPath @arguments
+        exit $LASTEXITCODE
     }
-
-    $hiddenArguments = @("-WindowStyle", "Hidden") + $arguments
-    Start-Process -FilePath $powerShellPath -ArgumentList $hiddenArguments -WorkingDirectory (Split-Path $CurrentScriptPath -Parent) | Out-Null
+    finally {
+        Pop-Location
+    }
 }
 
 # Update the locally installed launcher script before doing heavier startup work.
