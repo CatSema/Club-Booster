@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.0"
+$LauncherScriptVersion = "1.1.1"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
