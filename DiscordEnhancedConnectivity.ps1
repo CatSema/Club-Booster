@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.8"
+$LauncherScriptVersion = "1.1.9"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
@@ -95,6 +95,16 @@ function Show-ModalNotification {
     $label.AutoSize = $false
     $label.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
     $form.Controls.Add($label)
+
+    $versionLabel = New-Object System.Windows.Forms.Label
+    $versionLabel.Text = "v$LauncherScriptVersion"
+    $versionLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Regular)
+    $versionLabel.ForeColor = [System.Drawing.Color]::FromArgb(150, 152, 157)
+    $versionLabel.Location = New-Object System.Drawing.Point(320, 122)
+    $versionLabel.Size = New-Object System.Drawing.Size(60, 16)
+    $versionLabel.AutoSize = $false
+    $versionLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleRight
+    $form.Controls.Add($versionLabel)
     
     # Variables for dragging
     $script:isDragging = $false
