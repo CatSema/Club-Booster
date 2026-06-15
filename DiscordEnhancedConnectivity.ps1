@@ -19,7 +19,7 @@ if (!$mutex.WaitOne(100)) {
 $mutexAcquired = $true
 
 # Configuration
-$LauncherScriptVersion = "1.1.3"
+$LauncherScriptVersion = "1.1.4"
 $LatestReleaseApiUrl = "https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest"
 $SelfUpdateUrl = "https://raw.githubusercontent.com/CatSema/Club-Booster/refs/heads/main/DiscordEnhancedConnectivity.ps1"
 $TempDir = Join-Path $env:TEMP "DiscordEnhancedConnectivity_$(Get-Date -Format 'yyyyMMdd')"
@@ -501,7 +501,13 @@ function Update-LauncherScript {
         $tempUpdatePath = Join-Path $currentItem.DirectoryName "$($currentItem.BaseName).update.tmp"
 
         Write-LogMessage "Checking launcher script updates..." "INFO"
-        Invoke-WebRequest -Uri $SourceUrl -OutFile $tempUpdatePath -UseBasicParsing -TimeoutSec 15 -Headers @{ "User-Agent" = "Club-Booster" }
+        $cacheBusterSeparator = if ($SourceUrl.Contains("?")) { "&" } else { "?" }
+        $updateUrl = "$SourceUrl$cacheBusterSeparator`_cb=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+        Invoke-WebRequest -Uri $updateUrl -OutFile $tempUpdatePath -UseBasicParsing -TimeoutSec 15 -Headers @{
+            "User-Agent" = "Club-Booster"
+            "Cache-Control" = "no-cache"
+            "Pragma" = "no-cache"
+        }
 
         if (!(Test-Path $tempUpdatePath) -or (Get-Item $tempUpdatePath).Length -eq 0) {
             throw "Downloaded update is empty"
